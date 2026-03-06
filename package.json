@@ -1,0 +1,29 @@
+{
+  "name": "swoopt-next",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
+    "dotenv": "^17.3.1",
+    "next": "16.1.6",
+    "proper-lockfile": "^4.1.2",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "server-only": "^0.0.1",
+    "tailwindcss": "^4.2.1",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}

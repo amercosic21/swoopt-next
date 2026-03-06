@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="folder" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FDE68A"/>
+      <stop offset="100%" stop-color="#FCD34D"/>
+    </linearGradient>
+    <linearGradient id="tab" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FDBA74"/>
+      <stop offset="100%" stop-color="#FB923C"/>
+    </linearGradient>
+  </defs>
+  <!-- Folder tab -->
+  <path d="M4 8h8l2-3h14a2 2 0 0 1 2 2v2H4z" fill="url(#tab)"/>
+  <!-- Folder body -->
+  <rect x="2" y="9" width="28" height="20" rx="3" fill="url(#folder)" stroke="#d4a017" stroke-width="0.5"/>
+  <!-- Teal download arrow -->
+  <path d="M16 13v8" stroke="#14B8A6" stroke-width="3" stroke-linecap="round"/>
+  <path d="M11.5 18L16 23l4.5-5" stroke="#14B8A6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
