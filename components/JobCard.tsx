@@ -1,7 +1,8 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useI18n } from '@/hooks/useI18n';
-import { friendlyError } from '@/lib/errors';
+import { friendlyError } from '@/i18n/errors';
 import type { Job } from '@/types';
 
 function shortenUrl(url: string): string {
@@ -29,6 +30,54 @@ function getPhaseLabel(job: Job, t: (k: string) => string): string {
   }
 }
 
+const BADGE_BASE = 'bg-surface-3 rounded-xs text-[0.69rem] font-bold tracking-[0.05em] px-[7px] py-[2px] uppercase';
+
+/**
+ * Shared card header: thumbnail + title + channel/duration meta + format/type/
+ * status badges. `trailingBadge` (e.g. a timestamp) and `action` (e.g. a delete
+ * button) are optional slots used by the history variant.
+ */
+function JobCardHeader({
+  job, thumbnailLarge, trailingBadge, action,
+}: {
+  job: Job;
+  thumbnailLarge?: boolean;
+  trailingBadge?: ReactNode;
+  action?: ReactNode;
+}) {
+  const { t } = useI18n();
+
+  const displayTitle = job.current_title || job.thumbnail_title || shortenUrl(job.url);
+  const meta = job.type !== 'playlist'
+    ? [job.thumbnail_channel, job.thumbnail_duration].filter(Boolean)
+    : [];
+  const label = getPhaseLabel(job, t);
+  const dotClass = job.status === 'running' ? 'status-running' : `status-${job.status ?? 'queued'}`;
+
+  return (
+    <div className="flex items-start justify-between gap-3">
+      {job.thumbnail_url && (
+        <div className={`shrink-0 w-20 h-[52px] rounded-xs overflow-hidden bg-surface-3 max-[480px]:hidden${thumbnailLarge ? ' min-[1024px]:w-24 min-[1024px]:h-[62px]' : ''}`}>
+          <img src={job.thumbnail_url} alt="" loading="lazy" className="card-thumb-img w-full h-full object-cover block" />
+        </div>
+      )}
+      <div className="flex flex-col gap-[5px] min-w-0 flex-1">
+        <div className="text-[0.9rem] font-medium truncate text-primary max-[480px]:max-w-[200px]" title={job.url}>{displayTitle}</div>
+        {meta.length > 0 && (
+          <div className="text-[0.73rem] text-muted truncate">{meta.join(' · ')}</div>
+        )}
+        <div className="flex items-center gap-[7px]">
+          {job.format && <span className={`${BADGE_BASE} text-accent`}>{job.format}</span>}
+          {job.type   && <span className={`${BADGE_BASE} text-secondary`}>{job.type}</span>}
+          <span className={`status-dot inline-flex items-center gap-[5px] text-[0.75rem] font-medium ${dotClass}`}>{label}</span>
+          {trailingBadge}
+        </div>
+      </div>
+      {action}
+    </div>
+  );
+}
+
 interface ActiveJobCardProps {
   job: Job;
   onPause: (jobId: string) => void;
@@ -39,16 +88,8 @@ interface ActiveJobCardProps {
 export function ActiveJobCard({ job, onPause, onResume, onCancel }: ActiveJobCardProps) {
   const { t } = useI18n();
 
-  const label    = getPhaseLabel(job, t);
-  const dotClass = job.status === 'running' ? 'status-running' : `status-${job.status ?? 'queued'}`;
   const isPaused = job.status === 'paused';
   const isRunning = job.status === 'running';
-
-  const displayTitle = job.current_title || job.thumbnail_title || shortenUrl(job.url);
-
-  const channel  = job.type !== 'playlist' ? (job.thumbnail_channel || '') : '';
-  const duration = job.type !== 'playlist' ? (job.thumbnail_duration || '') : '';
-  const metaParts = [channel, duration].filter(Boolean);
 
   const playlistInfo = job.type === 'playlist' && (job.total_items ?? 0) > 0
     ? t('playlist.item').replace('{current}', String(job.current_item)).replace('{total}', String(job.total_items))
@@ -61,35 +102,14 @@ export function ActiveJobCard({ job, onPause, onResume, onCancel }: ActiveJobCar
   const progressInfoParts: string[] = [];
   if (playlistInfo) progressInfoParts.push(playlistInfo);
   if (!isPaused) {
-    if (job.phase === 'resuming')   progressInfoParts.push(t('phase.resumingEllipsis'));
+    if (job.phase === 'resuming')        progressInfoParts.push(t('phase.resumingEllipsis'));
     else if (job.phase === 'merging')    progressInfoParts.push(t('phase.mergingEllipsis'));
     else if (job.phase === 'processing') progressInfoParts.push(t('phase.processingEllipsis'));
   }
 
   return (
-    <div
-      className="job-card job-card-active"
-      id={`job-${job.id}`}
-      data-job-id={job.id}
-    >
-      <div className="flex items-start justify-between gap-3">
-        {job.thumbnail_url && (
-          <div className="shrink-0 w-20 h-[52px] rounded-xs overflow-hidden bg-surface-3 max-[480px]:hidden">
-            <img src={job.thumbnail_url} alt="" loading="lazy" className="card-thumb-img w-full h-full object-cover block" />
-          </div>
-        )}
-        <div className="flex flex-col gap-[5px] min-w-0 flex-1">
-          <div className="text-[0.9rem] font-medium truncate text-primary" title={job.url}>{displayTitle}</div>
-          {metaParts.length > 0 && (
-            <div className="text-[0.73rem] text-muted truncate">{metaParts.join(' · ')}</div>
-          )}
-          <div className="flex items-center gap-[7px]">
-            {job.format && <span className="bg-surface-3 rounded-xs text-[0.69rem] font-bold tracking-[0.05em] px-[7px] py-[2px] uppercase text-accent">{job.format}</span>}
-            {job.type   && <span className="bg-surface-3 rounded-xs text-[0.69rem] font-bold tracking-[0.05em] px-[7px] py-[2px] uppercase text-secondary">{job.type}</span>}
-            <span className={`status-dot inline-flex items-center gap-[5px] text-[0.75rem] font-medium ${dotClass}`}>{label}</span>
-          </div>
-        </div>
-      </div>
+    <div className="job-card job-card-active" id={`job-${job.id}`} data-job-id={job.id}>
+      <JobCardHeader job={job} />
 
       <div className="flex flex-col gap-1.5">
         <div className="bg-surface-3 rounded-full h-1.5 overflow-hidden w-full relative">
@@ -138,60 +158,36 @@ export function HistoryJobCard({ job, onRetry, onRemove }: HistoryJobCardProps) 
   const isFailed    = job.status === 'failed';
 
   const statusClass = isCompleted ? 'job-card-completed'
-    : job.status === 'failed'    ? 'job-card-failed'
+    : isFailed                    ? 'job-card-failed'
     : 'job-card-cancelled';
-
-  const dotClass = `status-${job.status}`;
-  const label    = getPhaseLabel(job, t);
-  const displayTitle = job.current_title || job.thumbnail_title || shortenUrl(job.url);
-
-  const channel  = job.type !== 'playlist' ? (job.thumbnail_channel || '') : '';
-  const duration = job.type !== 'playlist' ? (job.thumbnail_duration || '') : '';
-  const metaParts = [channel, duration].filter(Boolean);
 
   const ts = job.updated_at * 1000;
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
   const yesterdayStart = new Date(todayStart.getTime() - 86400000);
-  let dateLabel = '';
-  if (ts >= todayStart.getTime()) dateLabel = t('time.today');
-  else if (ts >= yesterdayStart.getTime()) dateLabel = t('time.yesterday');
-  else dateLabel = new Date(ts).toLocaleDateString();
+  const dateLabel = ts >= todayStart.getTime() ? t('time.today')
+    : ts >= yesterdayStart.getTime() ? t('time.yesterday')
+    : new Date(ts).toLocaleDateString();
   const timeLabel = new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div
-      className={`job-card ${statusClass}`}
-      data-job-id={job.id}
-    >
-      <div className="flex items-start justify-between gap-3">
-        {job.thumbnail_url && (
-          <div className="shrink-0 w-20 h-[52px] rounded-xs overflow-hidden bg-surface-3 max-[480px]:hidden min-[1024px]:w-24 min-[1024px]:h-[62px]">
-            <img src={job.thumbnail_url} alt="" loading="lazy" className="card-thumb-img w-full h-full object-cover block" />
-          </div>
-        )}
-        <div className="flex flex-col gap-[5px] min-w-0 flex-1">
-          <div className="text-[0.9rem] font-medium truncate text-primary max-[480px]:max-w-[200px]" title={job.url}>{displayTitle}</div>
-          {metaParts.length > 0 && (
-            <div className="text-[0.73rem] text-muted truncate">{metaParts.join(' · ')}</div>
-          )}
-          <div className="flex items-center gap-[7px]">
-            {job.format && <span className="bg-surface-3 rounded-xs text-[0.69rem] font-bold tracking-[0.05em] px-[7px] py-[2px] uppercase text-accent">{job.format}</span>}
-            {job.type   && <span className="bg-surface-3 rounded-xs text-[0.69rem] font-bold tracking-[0.05em] px-[7px] py-[2px] uppercase text-secondary">{job.type}</span>}
-            <span className={`status-dot inline-flex items-center gap-[5px] text-[0.75rem] font-medium ${dotClass}`}>{label}</span>
-            <span className="text-[0.7rem] text-muted ml-auto whitespace-nowrap">{dateLabel} {timeLabel}</span>
-          </div>
-        </div>
-        <button
-          className="btn-delete bg-transparent border-none rounded-full text-muted cursor-pointer flex items-center justify-center w-7 h-7 shrink-0"
-          title={t('history.removeFromHistory')}
-          aria-label={t('history.delete')}
-          onClick={() => onRemove(job.id)}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} width={14} height={14}>
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-      </div>
+    <div className={`job-card ${statusClass}`} data-job-id={job.id}>
+      <JobCardHeader
+        job={job}
+        thumbnailLarge
+        trailingBadge={<span className="text-[0.7rem] text-muted ml-auto whitespace-nowrap">{dateLabel} {timeLabel}</span>}
+        action={
+          <button
+            className="btn-delete bg-transparent border-none rounded-full text-muted cursor-pointer flex items-center justify-center w-7 h-7 shrink-0"
+            title={t('history.removeFromHistory')}
+            aria-label={t('history.delete')}
+            onClick={() => onRemove(job.id)}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} width={14} height={14}>
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        }
+      />
 
       {isCompleted && (
         <div className="flex items-center flex-wrap gap-2">

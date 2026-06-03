@@ -4,102 +4,14 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import { useI18n } from '@/hooks/useI18n';
 import { usePolling } from '@/hooks/usePolling';
+import { postJson } from '@/utils/http';
+import { formatDuration } from '@/utils/format';
+import { detectUrlType, stripPlaylistParams, normalizeUrl } from '@/utils/url';
+import {
+  VIDEO_QUALITIES, AUDIO_QUALITIES, ALL_FORMATS, AUDIO_FORMATS, AUDIO_ONLY_PLATFORMS,
+  type QualityOption,
+} from '@/utils/formats';
 import type { Job } from '@/types';
-
-const VIDEO_QUALITIES: { value: string; label: string }[] = [
-  { value: 'best',    label: 'Best' },
-  { value: '4k',      label: '4K' },
-  { value: '1440p',   label: '1440p' },
-  { value: '1080p60', label: '1080p 60fps' },
-  { value: '1080p',   label: '1080p' },
-  { value: '720p',    label: '720p' },
-  { value: '480p',    label: '480p' },
-  { value: '360p',    label: '360p' },
-  { value: '240p',    label: '240p' },
-  { value: '144p',    label: '144p' },
-];
-const AUDIO_QUALITIES: { value: string; label: string }[] = [
-  { value: 'best', label: 'Best' },
-  { value: '320k', label: '320k' },
-  { value: '192k', label: '192k' },
-  { value: '128k', label: '128k' },
-];
-const ALL_FORMATS  = ['mp4', 'webm', 'mp3', 'm4a', 'opus'];
-const AUDIO_FORMATS = ['mp3', 'm4a', 'opus'];
-const AUDIO_ONLY_PLATFORMS = /soundcloud\.com/i;
-
-function formatDuration(secs: number | string): string {
-  const n = typeof secs === 'string' ? parseInt(secs, 10) : secs;
-  if (!n || isNaN(n)) return '';
-  const h = Math.floor(n / 3600);
-  const m = Math.floor((n % 3600) / 60);
-  const s = n % 60;
-  return h > 0
-    ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-    : `${m}:${String(s).padStart(2, '0')}`;
-}
-
-function stripPlaylistParams(url: string): string {
-  try {
-    const u = new URL(url);
-    u.searchParams.delete('list');
-    u.searchParams.delete('index');
-    u.searchParams.delete('start_radio');
-    u.searchParams.delete('playnext');
-    return u.toString();
-  } catch {
-    return url;
-  }
-}
-
-const PLAYLIST_URL_PATTERNS = [
-  /[?&]list=[^&]+/,
-  /youtube\.com\/playlist\?/,
-  /youtube\.com\/@[^/]+\/playlists/,
-  /soundcloud\.com\/[^/]+\/sets\//,
-  /spotify\.com\/playlist\//,
-  /tiktok\.com\/@[^/]+\/playlist\//,
-  /vimeo\.com\/showcase\//,
-  /vimeo\.com\/channels\//,
-  /twitch\.tv\/[^/]+\/collections\//,
-];
-
-const SINGLE_VIDEO_PATTERNS = [
-  /youtube\.com\/watch\?v=[^&]+(?!.*[?&]list=)/,
-  /youtu\.be\/[a-zA-Z0-9_-]+/,
-  /vimeo\.com\/\d+/,
-  /tiktok\.com\/@[^/]+\/video\//,
-  /twitter\.com\/[^/]+\/status\//,
-  /x\.com\/[^/]+\/status\//,
-  /instagram\.com\/p\//,
-  /instagram\.com\/reel\//,
-  /dailymotion\.com\/video\//,
-  /soundcloud\.com\/[^/]+\/(?!sets\/)[^/]+/,
-  /twitch\.tv\/videos\/\d+/,
-  /twitch\.tv\/[^/]+\/clip\//,
-];
-
-/** Returns 'single' | 'playlist' | 'video-in-playlist' | null */
-function detectUrlType(url: string): 'single' | 'playlist' | 'video-in-playlist' | null {
-  if (!url) return null;
-
-  // YouTube video within a playlist (has both ?v= and ?list=) → user can pick either
-  const hasVideo = /[?&]v=[a-zA-Z0-9_-]+/.test(url);
-  const hasList = /[?&]list=[^&]+/.test(url);
-  if (hasVideo && hasList) return 'video-in-playlist';
-
-  // Pure playlist URL → lock to playlist
-  for (const pattern of PLAYLIST_URL_PATTERNS) {
-    if (pattern.test(url)) return 'playlist';
-  }
-
-  // Definite single video → lock to single
-  for (const pattern of SINGLE_VIDEO_PATTERNS) {
-    if (pattern.test(url)) return 'single';
-  }
-
-  return null;
-}
 
 export function DownloadForm() {
   const { t } = useI18n();
@@ -122,7 +34,7 @@ export function DownloadForm() {
   const thumbnailAbort = useRef<AbortController | null>(null);
 
   const isAudio = AUDIO_FORMATS.includes(selectedFormat);
-  const qualities: { value: string; label: string }[] = isAudio ? AUDIO_QUALITIES : VIDEO_QUALITIES;
+  const qualities: QualityOption[] = isAudio ? AUDIO_QUALITIES : VIDEO_QUALITIES;
   const visibleFormats = audioOnly ? AUDIO_FORMATS : ALL_FORMATS;
 
   // Thumbnail fetch with debounce
@@ -167,7 +79,7 @@ export function DownloadForm() {
     if (thumbnailAbort.current) thumbnailAbort.current.abort();
 
     // Normalize URL for detection and thumbnail fetch
-    const normalized = val.trim() && !/^https?:\/\//i.test(val.trim()) ? 'https://' + val.trim() : val.trim();
+    const normalized = normalizeUrl(val);
     const detected = detectUrlType(normalized);
     if (detected === 'single') {
       setLockedType('single');
@@ -204,10 +116,8 @@ export function DownloadForm() {
     if (!trimmedUrl) { setHint(t('form.enterUrl')); return; }
 
     // Auto-prepend https:// if the user omitted the protocol
-    if (trimmedUrl && !/^https?:\/\//i.test(trimmedUrl)) {
-      trimmedUrl = 'https://' + trimmedUrl;
-      setUrl(trimmedUrl);
-    }
+    const normalized = normalizeUrl(trimmedUrl);
+    if (normalized !== trimmedUrl) { trimmedUrl = normalized; setUrl(trimmedUrl); }
 
     const finalUrl = type === 'single' ? stripPlaylistParams(trimmedUrl) : trimmedUrl;
     const format = `${selectedFormat}_${selectedQuality}`;
@@ -225,14 +135,12 @@ export function DownloadForm() {
         body.thumbnail_duration = formatDuration(thumb.duration);
       }
 
-      const res  = await fetch('/api/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
+      const { ok, data } = await postJson<{
+        job_id: string; status?: Job['status']; queue_pos?: number;
+        meta?: Record<string, string>; error?: string;
+      }>('/api/download', body);
 
-      if (!res.ok) { setHint(data.error ?? t('form.unknownError')); return; }
+      if (!ok) { setHint(data.error ?? t('form.unknownError')); return; }
 
       setUrl('');
 
@@ -336,7 +244,7 @@ export function DownloadForm() {
         <div className="flex flex-col gap-2.5">
           <span className="text-[0.72rem] font-semibold uppercase tracking-[0.09em] text-secondary">{t('form.quality')}</span>
           <div className="grid grid-cols-5 gap-1.5" id="qualityGroup">
-            {qualities.map(({ value, label }, i) => (
+            {qualities.map(({ value, label }) => (
               <button
                 key={value}
                 className={`chip ${selectedQuality === value ? 'chip-active' : ''}`}

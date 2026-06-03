@@ -14,14 +14,6 @@ function persistActiveJobs(m: Map<string, Job>) {
   saveActiveJobIds(Array.from(m.keys()));
 }
 
-// ── localStorage helpers for format/quality ──────────────────────────────────
-function getSavedFormat(): string {
-  return localStorage.getItem('sw_format') || 'mp4';
-}
-function getSavedQuality(): string {
-  return localStorage.getItem('sw_quality') || 'best';
-}
-
 interface AppState {
   // Active jobs (polling)
   activeJobs: Map<string, Job>;

@@ -4,6 +4,7 @@ import path from 'path';
 import { validateJobId } from '@/lib/Sanitizer';
 import { getJob } from '@/lib/JobManager';
 import { BASE_DIR } from '@/lib/config';
+import { apiError } from '@/lib/apiHelpers';
 
 export async function GET(req: NextRequest) {
   try {
@@ -38,12 +39,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ...job, file_urls: job.files || [] });
   } catch (err) {
-    if (err instanceof Error && err.message.includes('not found')) {
-      return NextResponse.json({ error: 'Job not found.' }, { status: 404 });
-    }
-    if (err instanceof Error) {
-      return NextResponse.json({ error: err.message }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'Server error.' }, { status: 500 });
+    return apiError(err);
   }
 }

@@ -1,12 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { execSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { YTDLP_BIN } from '@/lib/config';
+import { clearVersionCache } from '@/lib/ytdlpVersion';
+import { isLocalRequest } from '@/lib/apiHelpers';
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  if (!isLocalRequest(req)) return NextResponse.json({ error: 'Forbidden.' }, { status: 403 });
   try {
     const output = execSync(`"${YTDLP_BIN}" -U 2>&1`, { encoding: 'utf-8', timeout: 60000 }).trim();
+    // Any update attempt may change the installed version — invalidate the check cache.
+    clearVersionCache();
 
     const isUpToDate = output.includes('up to date') || output.includes('up-to-date');
     const updated    = output.includes('Updating to') || output.includes('Updated yt-dlp');

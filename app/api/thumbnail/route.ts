@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import { validateUrl } from '@/lib/Sanitizer';
 import { YTDLP_BIN, FFMPEG_BIN, NODE_BIN } from '@/lib/config';
+import { apiError } from '@/lib/apiHelpers';
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,9 +16,11 @@ export async function GET(req: NextRequest) {
     const result = await new Promise<string>((resolve, reject) => {
       const proc = spawn(YTDLP_BIN, args, { stdio: ['ignore', 'pipe', 'ignore'] });
       let output = '';
+      // Kill a hung yt-dlp after 20s; an empty result becomes a graceful 422 below.
+      const killTimer = setTimeout(() => { try { proc.kill(); } catch { /* already gone */ } }, 20_000);
       proc.stdout.on('data', (chunk: Buffer) => { output += chunk.toString(); });
-      proc.on('close', () => resolve(output));
-      proc.on('error', reject);
+      proc.on('close', () => { clearTimeout(killTimer); resolve(output); });
+      proc.on('error', (err) => { clearTimeout(killTimer); reject(err); });
     });
 
     const json = JSON.parse(result.trim());
@@ -38,10 +41,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ title, thumbnail, duration, channel, has_video: hasVideo });
   } catch (err) {
-    if (err instanceof Error && err.message.includes('not supported')) {
-      return NextResponse.json({ error: err.message }, { status: 400 });
-    }
-    if (err instanceof Error) return NextResponse.json({ error: err.message }, { status: 400 });
-    return NextResponse.json({ error: 'Server error.' }, { status: 500 });
+    return apiError(err);
   }
 }

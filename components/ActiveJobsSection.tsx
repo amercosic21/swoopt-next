@@ -2,6 +2,7 @@
 
 import { useStore } from '@/store/useStore';
 import { useI18n } from '@/hooks/useI18n';
+import { postJson } from '@/utils/http';
 import { ActiveJobCard } from './JobCard';
 
 export function ActiveJobsSection() {
@@ -13,12 +14,8 @@ export function ActiveJobsSection() {
   const handlePause = async (jobId: string) => {
     updateActiveJob(jobId, { phase: 'paused' });
     try {
-      const res = await fetch('/api/pause', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: jobId }),
-      });
-      if (!res.ok) {
+      const { ok } = await postJson('/api/pause', { job_id: jobId });
+      if (!ok) {
         addToast(t('toast.couldNotPause'), 'error');
         updateActiveJob(jobId, { phase: 'downloading' });
       } else {
@@ -32,12 +29,8 @@ export function ActiveJobsSection() {
 
   const handleResume = async (jobId: string) => {
     try {
-      const res = await fetch('/api/resume', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: jobId }),
-      });
-      if (!res.ok) {
+      const { ok } = await postJson('/api/resume', { job_id: jobId });
+      if (!ok) {
         addToast(t('toast.couldNotResume'), 'error');
       } else {
         updateActiveJob(jobId, { status: 'running', phase: 'resuming' });
@@ -50,12 +43,8 @@ export function ActiveJobsSection() {
 
   const handleCancel = async (jobId: string) => {
     try {
-      const res = await fetch('/api/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: jobId }),
-      });
-      if (!res.ok) {
+      const { ok } = await postJson('/api/cancel', { job_id: jobId });
+      if (!ok) {
         addToast(t('toast.couldNotCancel'), 'error');
       } else {
         const job = activeJobs.get(jobId);

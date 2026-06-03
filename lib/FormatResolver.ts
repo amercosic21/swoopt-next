@@ -20,27 +20,59 @@ export function parseFormatKey(key: string): [string, string] {
   return [container, quality];
 }
 
+// Maps a quality key to its maximum video height in pixels. 'best' and any
+// unknown key return null (no height cap → take the highest available).
+const QUALITY_HEIGHT: Record<string, number> = {
+  '144p': 144,
+  '240p': 240,
+  '360p': 360,
+  '480p': 480,
+  '720p': 720,
+  '1080p': 1080,
+  '1080p60': 1080,
+  '4k': 2160,
+};
+
+/** Maximum requested video height for a format key, or null for "best"/audio/unknown. */
+export function requestedHeight(formatKey: string): number | null {
+  const [container, quality] = parseFormatKey(formatKey);
+  if (['mp3', 'm4a', 'opus'].includes(container)) return null;
+  return QUALITY_HEIGHT[quality] ?? null;
+}
+
 function videoFlags(ext: string, quality: string): string[] {
   const mergeExt = ext === 'webm' ? 'webm' : 'mp4';
+  const height = QUALITY_HEIGHT[quality] ?? null;
+  const fpsCap = quality === '1080p60' ? '[fps<=60]' : '';
 
-  const formatMap: Record<string, string> = {
-    '144p':    'bestvideo[height<=144]+bestaudio/best[height<=144]',
-    '240p':    'bestvideo[height<=240]+bestaudio/best[height<=240]',
-    '360p':    'bestvideo[height<=360]+bestaudio/best[height<=360]',
-    '480p':    `bestvideo[height<=480][ext=${ext}]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]`,
-    '720p':    `bestvideo[height<=720][ext=${ext}]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]`,
-    '1080p':   `bestvideo[height<=1080][ext=${ext}]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]`,
-    '1080p60': 'bestvideo[height<=1080][fps<=60]+bestaudio[ext=m4a]/bestvideo[height<=1080][fps<=60]+bestaudio/best[height<=1080]',
-    '4k':      `bestvideo[height<=2160][ext=${ext}]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best[height<=2160]`,
-  };
+  // Loose -f: take the best separate video+audio under the height cap, falling
+  // back to the best progressive stream only as a last resort. We deliberately
+  // do NOT constrain codecs/ext here — that hard-fails when the preferred codec
+  // is unavailable and causes a silent drop to the 360p progressive format.
+  // Codec/container preference is expressed via --format-sort below, which only
+  // *sorts* the available formats and therefore never fails to find a match.
+  const heightFilter = height ? `[height<=${height}]${fpsCap}` : '';
+  const formatStr = height
+    ? `bestvideo${heightFilter}+bestaudio/best${heightFilter}`
+    : 'bestvideo+bestaudio/best';
 
-  const formatStr = formatMap[quality] ?? 'bestvideo+bestaudio/best';
+  // Prefer H.264 (avc1) video + AAC audio for mp4 so files play everywhere and
+  // match the quality users expect; prefer VP9 + Opus for webm. `res`/`fps`
+  // stay first so resolution is never sacrificed for codec preference.
+  const sort = mergeExt === 'mp4'
+    ? 'res,fps,vcodec:h264,acodec:aac,br'
+    : 'res,fps,vcodec:vp9,acodec:opus,br';
 
-  const flags = ['--format', formatStr, '--merge-output-format', mergeExt];
-
-  if (mergeExt === 'mp4') {
-    flags.push('--postprocessor-args', 'Merger+ffmpeg:-c:a aac -b:a 192k');
-  }
+  // No forced audio re-encode: --format-sort already prefers AAC (for mp4) /
+  // Opus (for webm), so the merge is a near-instant stream copy. Re-encoding
+  // every download to AAC wasted seconds (and slightly degraded audio) for no
+  // gain. yt-dlp still transparently re-encodes only when a codec genuinely
+  // can't be muxed into the chosen container.
+  const flags = [
+    '--format', formatStr,
+    '--format-sort', sort,
+    '--merge-output-format', mergeExt,
+  ];
 
   return flags;
 }

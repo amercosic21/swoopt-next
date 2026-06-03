@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useI18n } from '@/hooks/useI18n';
+import { postJson } from '@/utils/http';
 import type { AppSettings } from '@/types';
 
 interface SettingsPanelProps {
@@ -12,6 +13,50 @@ interface SettingsPanelProps {
 const isLocalhost =
   typeof window !== 'undefined' &&
   ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+
+/** Title + description block shared by setting rows. */
+function SettingLabel({ title, desc }: { title: string; desc: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[0.82rem] font-semibold text-primary">{title}</span>
+      <span className="text-[0.72rem] text-muted leading-[1.4]">{desc}</span>
+    </div>
+  );
+}
+
+/** A labelled <select> row (children are the <option>s). */
+function SettingSelect({ title, desc, value, onChange, children }: {
+  title: string; desc: string; value: string;
+  onChange: (value: string) => void; children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2 py-3.5 border-b border-edge">
+      <SettingLabel title={title} desc={desc} />
+      <div className="flex items-center gap-2">
+        <select
+          className="input-field w-full flex-1 py-2 px-3 text-[0.82rem] bg-surface-2 border border-edge rounded-sm text-primary font-sans outline-none cursor-pointer appearance-auto"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+        >
+          {children}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+/** A toggle switch with a label. */
+function SettingToggle({ label, checked, onChange }: {
+  label: string; checked: boolean; onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="setting-toggle flex items-center gap-2.5 cursor-pointer select-none">
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />
+      <span className="toggle-slider"></span>
+      <span className="text-[0.8rem] font-medium text-secondary">{label}</span>
+    </label>
+  );
+}
 
 export function SettingsPanel({ visible, onClose }: SettingsPanelProps) {
   const { t } = useI18n();
@@ -56,18 +101,14 @@ export function SettingsPanel({ visible, onClose }: SettingsPanelProps) {
   const saveSettings = async () => {
     setStatus(t('settings.saving'));
     try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rate_limit: rateLimit,
-          cookies_browser: cookiesBrowser,
-          subtitles,
-          embed_metadata: embedMetadata,
-          embed_thumbnail: embedThumbnail,
-        }),
+      const { ok } = await postJson('/api/settings', {
+        rate_limit: rateLimit,
+        cookies_browser: cookiesBrowser,
+        subtitles,
+        embed_metadata: embedMetadata,
+        embed_thumbnail: embedThumbnail,
       });
-      if (res.ok) {
+      if (ok) {
         setStatus(t('settings.saved'));
         setTimeout(() => setStatus(''), 2000);
       } else {
@@ -81,8 +122,7 @@ export function SettingsPanel({ visible, onClose }: SettingsPanelProps) {
   const updateYtdlp = async () => {
     setUpdateLabel(t('settings.updating'));
     try {
-      const res = await fetch('/api/update-ytdlp', { method: 'POST' });
-      const data = await res.json();
+      const { data } = await postJson<{ status?: string }>('/api/update-ytdlp', {});
       if (data.status === 'updated') setUpdateLabel(t('toast.engineUpdated'));
       else if (data.status === 'up_to_date') setUpdateLabel(t('toast.engineUpToDate'));
       else setUpdateLabel(t('toast.updateFailed'));
@@ -105,11 +145,7 @@ export function SettingsPanel({ visible, onClose }: SettingsPanelProps) {
           </svg>
           {t('settings.title')}
         </h2>
-        <button
-          className="btn-icon"
-          onClick={onClose}
-          aria-label={t('settings.close')}
-        >
+        <button className="btn-icon" onClick={onClose} aria-label={t('settings.close')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} width={16} height={16}>
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
@@ -117,81 +153,48 @@ export function SettingsPanel({ visible, onClose }: SettingsPanelProps) {
       </div>
 
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2 py-3.5 border-b border-edge">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[0.82rem] font-semibold text-primary">{t('settings.speedLimit')}</span>
-            <span className="text-[0.72rem] text-muted leading-[1.4]">{t('settings.speedLimit.desc')}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              className="input-field w-full flex-1 py-2 px-3 text-[0.82rem] bg-surface-2 border border-edge rounded-sm text-primary font-sans outline-none cursor-pointer appearance-auto"
-              value={rateLimit}
-              onChange={e => setRateLimit(e.target.value)}
-            >
-              <option value="">{t('settings.unlimited')}</option>
-              <option value="500K">0.5 MB/s</option>
-              <option value="1M">1 MB/s</option>
-              <option value="2M">2 MB/s</option>
-              <option value="5M">5 MB/s</option>
-              <option value="10M">10 MB/s</option>
-              <option value="20M">20 MB/s</option>
-              <option value="50M">50 MB/s</option>
-            </select>
-          </div>
-        </div>
+        <SettingSelect
+          title={t('settings.speedLimit')}
+          desc={t('settings.speedLimit.desc')}
+          value={rateLimit}
+          onChange={setRateLimit}
+        >
+          <option value="">{t('settings.unlimited')}</option>
+          <option value="500K">0.5 MB/s</option>
+          <option value="1M">1 MB/s</option>
+          <option value="2M">2 MB/s</option>
+          <option value="5M">5 MB/s</option>
+          <option value="10M">10 MB/s</option>
+          <option value="20M">20 MB/s</option>
+          <option value="50M">50 MB/s</option>
+        </SettingSelect>
 
-        <div className="flex flex-col gap-2 py-3.5 border-b border-edge">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[0.82rem] font-semibold text-primary">{t('settings.browserCookies')}</span>
-            <span className="text-[0.72rem] text-muted leading-[1.4]">{t('settings.browserCookies.desc')}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              className="input-field w-full flex-1 py-2 px-3 text-[0.82rem] bg-surface-2 border border-edge rounded-sm text-primary font-sans outline-none cursor-pointer appearance-auto"
-              value={cookiesBrowser}
-              onChange={e => setCookiesBrowser(e.target.value)}
-            >
-              <option value="">{t('settings.disabled')}</option>
-              <option value="chrome">Chrome</option>
-              <option value="firefox">Firefox</option>
-              <option value="edge">Edge</option>
-              <option value="opera">Opera</option>
-              <option value="brave">Brave</option>
-              <option value="vivaldi">Vivaldi</option>
-              <option value="safari">Safari</option>
-            </select>
-          </div>
-        </div>
+        <SettingSelect
+          title={t('settings.browserCookies')}
+          desc={t('settings.browserCookies.desc')}
+          value={cookiesBrowser}
+          onChange={setCookiesBrowser}
+        >
+          <option value="">{t('settings.disabled')}</option>
+          <option value="chrome">Chrome</option>
+          <option value="firefox">Firefox</option>
+          <option value="edge">Edge</option>
+          <option value="opera">Opera</option>
+          <option value="brave">Brave</option>
+          <option value="vivaldi">Vivaldi</option>
+          <option value="safari">Safari</option>
+        </SettingSelect>
 
         <div className="flex flex-wrap gap-4 py-2 max-[480px]:flex-col">
-          <label className="setting-toggle flex items-center gap-2.5 cursor-pointer select-none">
-            <input type="checkbox" checked={subtitles} onChange={e => setSubtitles(e.target.checked)} />
-            <span className="toggle-slider"></span>
-            <span className="text-[0.8rem] font-medium text-secondary">{t('settings.downloadCaptions')}</span>
-          </label>
-          <label className="setting-toggle flex items-center gap-2.5 cursor-pointer select-none">
-            <input type="checkbox" checked={embedMetadata} onChange={e => setEmbedMetadata(e.target.checked)} />
-            <span className="toggle-slider"></span>
-            <span className="text-[0.8rem] font-medium text-secondary">{t('settings.embedMetadata')}</span>
-          </label>
-          <label className="setting-toggle flex items-center gap-2.5 cursor-pointer select-none">
-            <input type="checkbox" checked={embedThumbnail} onChange={e => setEmbedThumbnail(e.target.checked)} />
-            <span className="toggle-slider"></span>
-            <span className="text-[0.8rem] font-medium text-secondary">{t('settings.embedThumbnail')}</span>
-          </label>
-          <label className="setting-toggle flex items-center gap-2.5 cursor-pointer select-none">
-            <input type="checkbox" checked={reduceMotion} onChange={e => handleReduceMotion(e.target.checked)} />
-            <span className="toggle-slider"></span>
-            <span className="text-[0.8rem] font-medium text-secondary">{t('settings.reduceAnimations')}</span>
-          </label>
+          <SettingToggle label={t('settings.downloadCaptions')} checked={subtitles} onChange={setSubtitles} />
+          <SettingToggle label={t('settings.embedMetadata')} checked={embedMetadata} onChange={setEmbedMetadata} />
+          <SettingToggle label={t('settings.embedThumbnail')} checked={embedThumbnail} onChange={setEmbedThumbnail} />
+          <SettingToggle label={t('settings.reduceAnimations')} checked={reduceMotion} onChange={handleReduceMotion} />
         </div>
 
         {isLocalhost && (
           <div className="flex flex-row items-center justify-between gap-4 py-3.5 border-b border-edge max-[700px]:flex-col max-[700px]:items-stretch">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[0.82rem] font-semibold text-primary">{t('settings.downloadEngine')}</span>
-              <span className="text-[0.72rem] text-muted leading-[1.4]">{t('settings.downloadEngine.desc')}</span>
-            </div>
+            <SettingLabel title={t('settings.downloadEngine')} desc={t('settings.downloadEngine.desc')} />
             <button
               className="btn-ghost inline-flex items-center bg-surface-2 border border-edge-2 rounded-sm text-secondary cursor-pointer font-sans text-[0.76rem] font-medium gap-1.5 py-[5px] px-[11px]"
               onClick={updateYtdlp}

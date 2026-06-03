@@ -3,15 +3,10 @@
 import { useStore } from '@/store/useStore';
 import { useI18n } from '@/hooks/useI18n';
 import { useTheme } from '@/hooks/useTheme';
+import { formatBytes } from '@/utils/format';
 
 interface HeaderProps {
   onSettingsToggle: () => void;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
-  return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
 }
 
 export function Header({ onSettingsToggle }: HeaderProps) {

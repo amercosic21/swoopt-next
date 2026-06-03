@@ -3,6 +3,7 @@ import { validateUrl, validateFormat, validateType } from '@/lib/Sanitizer';
 import { createJob, updateJob, countByStatus, purgeExpired, getByStatus } from '@/lib/JobManager';
 import { dispatch } from '@/lib/Downloader';
 import { MAX_CONCURRENT_JOBS } from '@/lib/config';
+import { apiError } from '@/lib/apiHelpers';
 
 export async function POST(req: NextRequest) {
   try {
@@ -68,12 +69,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(response);
   } catch (err) {
-    if (err instanceof Error && err.message.includes('not supported')) {
-      return NextResponse.json({ error: err.message }, { status: 400 });
-    }
-    if (err instanceof Error) {
-      return NextResponse.json({ error: err.message }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'A server error occurred.' }, { status: 500 });
+    return apiError(err);
   }
 }

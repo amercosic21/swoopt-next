@@ -2,25 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { DOWNLOADS_DIR, JOBS_DIR, JOB_TTL } from './config';
+import { readJson, writeJsonAtomic } from './jsonFile';
 import type { Job, JobStatus } from '@/types';
 
 function jobPath(jobId: string): string {
   return path.join(JOBS_DIR, `${jobId}.json`);
 }
 
-function readJobFile(filePath: string): Job | null {
-  try {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const data = JSON.parse(content);
-    return data as Job;
-  } catch {
-    return null;
-  }
-}
-
-function writeJobFile(filePath: string, job: Job): void {
-  fs.writeFileSync(filePath, JSON.stringify(job, null, 2), 'utf-8');
-}
+const readJobFile = (filePath: string): Job | null => readJson<Job>(filePath);
+const writeJobFile = (filePath: string, job: Job): void => writeJsonAtomic(filePath, job);
 
 export function createJob(url: string, format: string, type: string): Job {
   const id = randomUUID();
@@ -79,48 +69,33 @@ export function updateJob(jobId: string, changes: Partial<Job>): void {
   writeJobFile(p, updated);
 }
 
-export function getAllJobs(limit = 50, offset = 0): Job[] {
+/** Read and parse every job file (skipping unreadable ones). */
+function loadAllJobs(): Job[] {
   if (!fs.existsSync(JOBS_DIR)) return [];
-
-  const files = fs.readdirSync(JOBS_DIR).filter(f => f.endsWith('.json'));
   const jobs: Job[] = [];
-
-  for (const file of files) {
+  for (const file of fs.readdirSync(JOBS_DIR)) {
+    if (!file.endsWith('.json')) continue;
     const job = readJobFile(path.join(JOBS_DIR, file));
     if (job) jobs.push(job);
   }
+  return jobs;
+}
 
-  jobs.sort((a, b) => b.created_at - a.created_at);
-  return jobs.slice(offset, offset + limit);
+export function getAllJobs(limit = 50, offset = 0): Job[] {
+  return loadAllJobs()
+    .sort((a, b) => b.created_at - a.created_at)
+    .slice(offset, offset + limit);
 }
 
 export function countByStatus(status: JobStatus): number {
-  if (!fs.existsSync(JOBS_DIR)) return 0;
-
-  const files = fs.readdirSync(JOBS_DIR).filter(f => f.endsWith('.json'));
-  let count = 0;
-
-  for (const file of files) {
-    const job = readJobFile(path.join(JOBS_DIR, file));
-    if (job && job.status === status) count++;
-  }
-
-  return count;
+  return loadAllJobs().filter(j => j.status === status).length;
 }
 
 export function getByStatus(status: JobStatus, limit = 10): Job[] {
-  if (!fs.existsSync(JOBS_DIR)) return [];
-
-  const files = fs.readdirSync(JOBS_DIR).filter(f => f.endsWith('.json'));
-  const jobs: Job[] = [];
-
-  for (const file of files) {
-    const job = readJobFile(path.join(JOBS_DIR, file));
-    if (job && job.status === status) jobs.push(job);
-  }
-
-  jobs.sort((a, b) => a.created_at - b.created_at);
-  return jobs.slice(0, limit);
+  return loadAllJobs()
+    .filter(j => j.status === status)
+    .sort((a, b) => a.created_at - b.created_at)
+    .slice(0, limit);
 }
 
 export function deleteJob(jobId: string): void {

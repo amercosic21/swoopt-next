@@ -11,11 +11,13 @@ import { DownloadForm } from '@/components/DownloadForm';
 import { ActiveJobsSection } from '@/components/ActiveJobsSection';
 import { HistorySection } from '@/components/HistorySection';
 import { ToastContainer } from '@/components/Toast';
+import { UpdateBanner } from '@/components/UpdateBanner';
+import { completionToast } from '@/utils/jobMessages';
 import type { Job } from '@/types';
 
 export default function Home() {
   const i18n = useI18nProvider();
-  const { setHistoryJobs, setStats, setFormat, setQuality, addActiveJob, removeActiveJob, prependHistory, addToast, addDelivered } = useStore();
+  const { setHistoryJobs, setStats, setFormat, setQuality, addActiveJob, prependHistory, addToast, addDelivered } = useStore();
   const { startPolling } = usePolling();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -72,7 +74,8 @@ export default function Home() {
 
           if (['completed', 'failed', 'cancelled'].includes(job.status)) {
             if (job.status === 'completed') {
-              addToast(job.warning ? i18n.t('toast.doneSkipped') : i18n.t('toast.downloadComplete'), job.warning ? 'info' : 'success');
+              const { key, type } = completionToast(job);
+              addToast(i18n.t(key), type);
               fetch('/api/stats').then(r => r.json()).then(data => {
                 setStats(data.total_downloads || 0, data.total_bytes || 0);
               }).catch(() => {});
@@ -121,6 +124,7 @@ export default function Home() {
 
       <div className="app">
         <main className="main">
+          <UpdateBanner />
           <SettingsPanel visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
           <ThumbnailPreview />
           <DownloadForm />

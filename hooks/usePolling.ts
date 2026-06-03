@@ -2,7 +2,9 @@
 
 import { useRef, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
-import { getTranslation } from '@/hooks/useI18n';
+import { getTranslation } from '@/i18n/translations';
+import { postJsonVoid } from '@/utils/http';
+import { completionToast } from '@/utils/jobMessages';
 import type { Job } from '@/types';
 
 function sendNotification(title: string, body: string) {
@@ -26,11 +28,7 @@ function autoDownloadFiles(fileUrls: string[]) {
 }
 
 function cleanupServerFiles(jobId: string) {
-  fetch('/api/cleanup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ job_id: jobId }),
-  }).catch(() => {});
+  postJsonVoid('/api/cleanup', { job_id: jobId });
 }
 
 export function usePolling() {
@@ -82,24 +80,15 @@ export function usePolling() {
           const t = getTranslation;
 
           if (job.status === 'completed') {
-            const msg = job.warning ? t('toast.doneSkipped') : t('toast.downloadComplete');
-            addToast(msg, job.warning ? 'info' : 'success');
+            const { key, type } = completionToast(job);
+            const msg = t(key);
+            addToast(msg, type);
             sendNotification('Swoopt', msg);
 
             const alreadyDelivered = useStore.getState().deliveredFiles.get(jobId) || new Set<string>();
             const remaining = (job.file_urls ?? []).filter(f => !alreadyDelivered.has(f));
 
-            remaining.forEach((url, i) => {
-              setTimeout(() => {
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = decodeURIComponent(url.split('/').pop() || '');
-                a.style.display = 'none';
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => a.remove(), 1000);
-              }, i * 400);
-            });
+            autoDownloadFiles(remaining);
 
             const cleanupDelay = remaining.length * 400 + 3000;
             setTimeout(() => cleanupServerFiles(jobId), cleanupDelay);

@@ -1,5 +1,7 @@
-import { getTranslation } from '@/hooks/useI18n';
+import { getTranslation } from './translations';
 
+// Maps raw yt-dlp / network error text to a user-friendly translation key.
+// First matching rule wins, so order from most to least specific.
 const ERROR_RULES: [RegExp, string][] = [
   [/video unavailable|this video is not available|has been removed/i, 'error.unavailable'],
   [/private video|sign in to confirm your age|age.restricted/i, 'error.private'],
@@ -38,7 +40,7 @@ export function friendlyError(raw: string | null | undefined): string {
     .replace(/\s{2,}/g, ' ');
 
   if (cleaned.length > 0) {
-    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1, 160) + (cleaned.length > 160 ? '\u2026' : '');
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1, 160) + (cleaned.length > 160 ? '…' : '');
   }
 
   return t('error.genericFailed');

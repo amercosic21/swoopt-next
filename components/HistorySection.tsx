@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useStore } from '@/store/useStore';
 import { useI18n } from '@/hooks/useI18n';
+import { postJson, postJsonVoid } from '@/utils/http';
 import { HistoryJobCard } from './JobCard';
 import type { Job } from '@/types';
 
@@ -15,11 +16,7 @@ export function HistorySection() {
 
   const handleRemove = async (jobId: string) => {
     try {
-      await fetch('/api/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: jobId }),
-      });
+      await postJson('/api/delete', { job_id: jobId });
       removeHistory(jobId);
       addToast(t('toast.downloadRemoved'), 'info');
     } catch { /* ignore */ }
@@ -27,13 +24,11 @@ export function HistorySection() {
 
   const handleRetry = async (job: Job) => {
     try {
-      const res = await fetch('/api/download', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: job.url, format: job.format, type: job.type }),
-      });
-      const data = await res.json();
-      if (!res.ok) { addToast(data.error || t('form.unknownError'), 'error'); return; }
+      const { ok, data } = await postJson<{ job_id: string; status?: Job['status']; error?: string }>(
+        '/api/download',
+        { url: job.url, format: job.format, type: job.type },
+      );
+      if (!ok) { addToast(data.error || t('form.unknownError'), 'error'); return; }
 
       const newJob: Job = {
         ...job,
@@ -54,13 +49,7 @@ export function HistorySection() {
 
   const handleClearAll = async () => {
     const jobs = [...historyJobs];
-    await Promise.all(jobs.map(job =>
-      fetch('/api/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: job.id }),
-      }).catch(() => {})
-    ));
+    await Promise.all(jobs.map(job => postJsonVoid('/api/delete', { job_id: job.id })));
     jobs.forEach(job => removeHistory(job.id));
   };
 

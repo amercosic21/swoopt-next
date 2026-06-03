@@ -27,11 +27,38 @@ if (!jobId) {
 // Dynamic imports — must happen AFTER dotenv so config.ts reads the correct env vars
 (async () => {
   const { validateJobId } = await import('../lib/Sanitizer');
-  const { getJob, updateJob, getByStatus } = await import('../lib/JobManager');
+  const { updateJob, getByStatus } = await import('../lib/JobManager');
   const { run, dispatch } = await import('../lib/Downloader');
   const { YTDLP_BIN, LOGS_DIR } = await import('../lib/config');
 
-  // Auto-update yt-dlp once per day
+  // Run the download FIRST so nothing delays its start. The yt-dlp self-update
+  // (which can run `yt-dlp -U` or even `pip install -U`, taking many seconds)
+  // used to run here and stalled the first download of each day; it now runs
+  // afterwards (see below) and applies to subsequent downloads instead.
+  try {
+    validateJobId(jobId);
+    await run(jobId);
+  } catch (err) {
+    try {
+      updateJob(jobId, {
+        status: 'failed',
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    } catch { /* job file may not exist */ }
+    process.stderr.write(`Worker error: ${err}\n`);
+  }
+
+  // Dispatch the next queued job before the (potentially slow) update check so
+  // the queue keeps moving.
+  try {
+    const queued = getByStatus('queued', 1);
+    if (queued.length > 0) {
+      dispatch(queued[0].id);
+    }
+  } catch { /* non-fatal */ }
+
+  // Auto-update yt-dlp once per day — deferred to after the download so it never
+  // adds latency to the user's start. Applies from the next download onwards.
   try {
     fs.mkdirSync(LOGS_DIR, { recursive: true });
     const stampFile = path.join(LOGS_DIR, '.ytdlp_last_update');
@@ -50,28 +77,6 @@ if (!jobId) {
         }
       } catch { /* non-fatal */ }
       fs.writeFileSync(stampFile, String(Math.floor(Date.now() / 1000)));
-    }
-  } catch { /* non-fatal */ }
-
-  // Run the download
-  try {
-    validateJobId(jobId);
-    await run(jobId);
-  } catch (err) {
-    try {
-      updateJob(jobId, {
-        status: 'failed',
-        error: err instanceof Error ? err.message : 'Unknown error',
-      });
-    } catch { /* job file may not exist */ }
-    process.stderr.write(`Worker error: ${err}\n`);
-  }
-
-  // After job finishes, dispatch next queued job
-  try {
-    const queued = getByStatus('queued', 1);
-    if (queued.length > 0) {
-      dispatch(queued[0].id);
     }
   } catch { /* non-fatal */ }
 })();

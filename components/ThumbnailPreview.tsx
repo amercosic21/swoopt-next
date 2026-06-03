@@ -2,6 +2,7 @@
 
 import { useI18n } from '@/hooks/useI18n';
 import { useStore } from '@/store/useStore';
+import { formatDuration } from '@/utils/format';
 
 export function ThumbnailPreview() {
   const { t } = useI18n();
@@ -10,16 +11,6 @@ export function ThumbnailPreview() {
   if (!thumbnailData) return null;
 
   const { title, thumbnail, channel, duration } = thumbnailData;
-
-  const formatDuration = (secs: number) => {
-    if (!secs) return '';
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    return h > 0
-      ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-      : `${m}:${String(s).padStart(2, '0')}`;
-  };
 
   const durationStr = typeof duration === 'number' ? formatDuration(duration) : duration;
 
