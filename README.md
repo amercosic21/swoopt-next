@@ -8,18 +8,18 @@ A self-hosted media downloader built with Next.js. Paste a URL, pick a format, a
 
 ## Features
 
-- **Video & audio downloads** — MP4, WebM, MP3, M4A, WAV, FLAC, Opus
-- **Quality selection** — From 144p to 4K, plus "Best" auto-selection
-- **Playlist support** — Download entire playlists with progress tracking per item
-- **Live progress** — Real-time progress bars, download speed, and file size
-- **Pause & resume** — Pause active downloads and resume them later
-- **Resumable file delivery** — Completed files stream with HTTP Range support, so browser downloads can resume and seek
-- **Download history** — View completed, failed, and cancelled downloads with retry
-- **Thumbnail preview** — Auto-fetches video thumbnails before downloading
-- **Settings** — Speed limits, browser cookies, captions, metadata embedding, thumbnail embedding
-- **Dark & light themes** — Smooth theme transitions with system preference detection
-- **Internationalization** — English and Bosnian, easily extensible
-- **Engine updates** — Daily yt-dlp self-update, plus an in-app banner that notifies when a newer version is available and updates it with one click (localhost only)
+- **Video & audio downloads** - MP4, WebM, MP3, M4A, WAV, FLAC, Opus
+- **Quality selection** - From 144p to 4K, plus "Best" auto-selection
+- **Playlist support** - Download entire playlists with progress tracking per item
+- **Live progress** - Real-time progress bars, download speed, and file size
+- **Pause & resume** - Pause active downloads and resume them later
+- **Resumable file delivery** - Completed files stream with HTTP Range support, so browser downloads can resume and seek
+- **Download history** - View completed, failed, and cancelled downloads with retry
+- **Thumbnail preview** - Auto-fetches video thumbnails before downloading
+- **Settings** - Speed limits, browser cookies, captions, metadata embedding, thumbnail embedding
+- **Dark & light themes** - Smooth theme transitions with system preference detection
+- **Internationalization** - English and Bosnian, easily extensible
+- **Engine updates** - Daily yt-dlp self-update, plus an in-app banner that notifies when a newer version is available and updates it with one click (localhost only)
 
 ## Tech Stack
 
@@ -27,44 +27,130 @@ A self-hosted media downloader built with Next.js. Paste a URL, pick a format, a
 - **Backend:** Next.js API routes, Node.js worker processes
 - **Download engine:** [yt-dlp](https://github.com/yt-dlp/yt-dlp) + [FFmpeg](https://ffmpeg.org/)
 
-## Prerequisites
+## Getting Started
 
-- Node.js 20+
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) installed and available in PATH
-- [FFmpeg](https://ffmpeg.org/) installed and available in PATH
+Swoopt needs two kinds of tools on your machine: **Node.js** to run the app itself,
+and the **download engine** (`yt-dlp` + `ffmpeg`/`ffprobe`) that does the actual work.
 
-## Setup
+### 1. Install the tools
+
+| Tool | Why it's needed |
+| --- | --- |
+| **Node.js 20+** | Runs the Next.js app. The [official installer](https://nodejs.org/) adds it to your PATH automatically. |
+| **yt-dlp** | Fetches and downloads the media. |
+| **ffmpeg** (includes **ffprobe**) | Merges video+audio, remuxes, and verifies delivered quality. |
+
+The app finds `yt-dlp`, `ffmpeg`, and `ffprobe` by name, so they need to be on your
+**PATH** - the list of folders your operating system searches when you run a command
+by name. You have two ways to satisfy this:
+
+**Option A - put them on PATH (recommended, zero config).** Once they're on PATH,
+no extra configuration is needed. Easiest installs:
 
 ```bash
-# Clone the repository
+# Windows (Scoop):
+scoop install yt-dlp ffmpeg
+
+# macOS (Homebrew):
+brew install yt-dlp ffmpeg
+
+# Linux (Debian/Ubuntu):
+sudo apt install ffmpeg && sudo pipx install yt-dlp
+```
+
+Or download the standalone binaries manually, drop them in any folder
+(e.g. `C:\Users\<you>\bin`), and add that folder to your PATH.
+
+**Option B - point the app at explicit paths.** If you'd rather not touch PATH,
+install the tools anywhere and tell the app where they are via `.env.local`
+(see [Environment Variables](#environment-variables)).
+
+> ffprobe ships inside the ffmpeg package, so wherever `ffmpeg.exe` goes, make sure
+> `ffprobe.exe` lands beside it.
+
+> **Keeping yt-dlp current:** the in-app update button (and a daily background check)
+> work out how yt-dlp was installed and update it the right way - `scoop update` for a
+> Scoop install, `yt-dlp -U` for a standalone binary. If you installed it through some
+> other package manager (Homebrew, apt/pipx), update it through that manager instead.
+> Downloads keep working either way.
+
+### 2. Get the app
+
+```bash
 git clone https://github.com/amercosic21/swoopt-next.git
 cd swoopt-next
+```
 
-# Install dependencies
+### 3. Run it
+
+```bash
+# Development (hot reload):
 npm install
-
-# Create environment file (optional)
-cp .env.example .env.local
-
-# Start development server
 npm run dev
+
+# Production (faster, used by the Windows launcher below):
+npm install
+npm run build
+npm start
 ```
 
 The app will be available at `http://localhost:3000`.
 
-## Environment Variables
+## Quick Launch (Windows)
 
-Create a `.env.local` file to customize:
+Instead of opening a terminal every time, you can launch Swoopt from a Desktop
+shortcut. The `launcher/` folder contains everything for this.
 
-```env
-YTDLP_BIN=yt-dlp          # Path to yt-dlp binary
-FFMPEG_BIN=ffmpeg          # Path to ffmpeg binary
-NODE_BIN=node              # Path to node (yt-dlp JS runtime for YouTube on Windows)
-MAX_CONCURRENT_JOBS=3      # Max simultaneous downloads
-JOB_TTL=86400              # Job data retention in seconds (default: 24h)
+### One-time setup
+
+1. Make sure the tools from [Getting Started](#1-install-the-tools) are installed
+   (and a `.env.local` exists if you went with Option B).
+2. Double-click **`launcher/install-shortcut.bat`**. This creates a **Swoopt**
+   shortcut on your Desktop.
+
+### Daily use
+
+Double-click the **Swoopt** Desktop shortcut. It will:
+
+- on the very first launch, run `npm install` and `npm run build` once (so you don't
+  have to),
+- start the server and open `http://localhost:3000` in your browser,
+- stay minimized in the taskbar - close that window to stop the server.
+
+If a server is already running, clicking the shortcut just reopens the browser tab
+instead of starting a second one.
+
+> After pulling new code changes, run `npm run build` once so the launcher serves the
+> latest version (it only auto-builds when no build exists yet).
+
+### Launcher files
+
+```
+launcher/
+  start-swoopt.bat       # what the shortcut runs (path-independent)
+  install-shortcut.bat   # double-click once to create the Desktop shortcut
+  install-shortcut.ps1   # the PowerShell the installer calls
+  swoopt.ico             # the shortcut icon
 ```
 
-See `.env.example` for a copyable template.
+## Environment Variables
+
+Everything here is optional, and the values shown below are the built-in defaults.
+If those work for you, you don't need a `.env.local` at all - create one (by copying
+`.env.example`) only when you actually want to change something.
+
+```env
+# Binaries - leave these unset to find them on your PATH (recommended). Set an
+# absolute path only if you want to pin a specific binary instead of the PATH one.
+YTDLP_BIN=yt-dlp           # the yt-dlp executable
+FFMPEG_BIN=ffmpeg          # the ffmpeg executable (ffprobe is found next to it)
+NODE_BIN=node              # node, used as yt-dlp's JS runtime for YouTube on Windows
+
+# Behavior
+MAX_CONCURRENT_JOBS=3      # how many downloads run at once; the rest wait in a queue
+JOB_TTL=86400              # how long finished downloads stay in your history before
+                           # they're auto-cleared, in seconds (86400 = 24 hours)
+```
 
 ## Project Structure
 
@@ -86,10 +172,10 @@ utils/              # Pure, client-safe shared helpers
   formats.ts        #   Format/quality option lists
   jobMessages.ts    #   Maps a finished job to its completion toast
 i18n/               # Internationalization (shared client/server)
-  locales/          #   One file per language — en.ts is canonical
+  locales/          #   One file per language - en.ts is canonical
   translations.ts   #   Assembles locales + getTranslation()
   errors.ts         #   Maps yt-dlp errors to friendly messages
-lib/                # Server/worker logic — never imported by client code
+lib/                # Server/worker logic - never imported by client code
   Downloader.ts     #   Orchestrates a download (dispatch + run)
   progress.ts       #   Parses yt-dlp stdout into job progress
   metadata.ts       #   Background title/thumbnail/filesize enrichment
@@ -127,13 +213,6 @@ resolution, and version comparison.
 
 ```bash
 npm test
-```
-
-## Production
-
-```bash
-npm run build
-npm start
 ```
 
 ## License

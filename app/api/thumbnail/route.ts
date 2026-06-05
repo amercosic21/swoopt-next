@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     const url = validateUrl(req.nextUrl.searchParams.get('url') ?? '');
 
     const args: string[] = [];
-    if (FFMPEG_BIN) args.push('--ffmpeg-location', FFMPEG_BIN);
+    if (FFMPEG_BIN && FFMPEG_BIN !== 'ffmpeg') args.push('--ffmpeg-location', FFMPEG_BIN);
     if (process.platform === 'win32' && NODE_BIN) args.push('--js-runtimes', `node:${NODE_BIN}`);
     args.push('--dump-json', '--skip-download', '--no-warnings', '--playlist-items', '1', url);
 

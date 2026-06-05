@@ -7,7 +7,6 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import { execSync } from 'child_process';
 import { config as loadDotenv } from 'dotenv';
 
 // Resolve BASE_DIR from this file's location (worker/ → project root)
@@ -29,7 +28,8 @@ if (!jobId) {
   const { validateJobId } = await import('../lib/Sanitizer');
   const { updateJob, getByStatus } = await import('../lib/JobManager');
   const { run, dispatch } = await import('../lib/Downloader');
-  const { YTDLP_BIN, LOGS_DIR } = await import('../lib/config');
+  const { LOGS_DIR } = await import('../lib/config');
+  const { updateYtdlp } = await import('../lib/ytdlpUpdate');
 
   // Run the download FIRST so nothing delays its start. The yt-dlp self-update
   // (which can run `yt-dlp -U` or even `pip install -U`, taking many seconds)
@@ -67,15 +67,7 @@ if (!jobId) {
       : 0;
 
     if (Math.floor(Date.now() / 1000) - lastCheck > 86400) {
-      try {
-        const out = execSync(`"${YTDLP_BIN}" -U 2>&1`, { encoding: 'utf-8', timeout: 60000 });
-        if (out.includes('installed yt-dlp with pip') || out.includes('using the wheel from PyPi')) {
-          const pythonDir = path.dirname(path.dirname(YTDLP_BIN));
-          let pythonBin = path.join(pythonDir, 'python.exe');
-          if (!fs.existsSync(pythonBin)) pythonBin = 'python';
-          execSync(`"${pythonBin}" -m pip install -U yt-dlp 2>&1`, { timeout: 120000 });
-        }
-      } catch { /* non-fatal */ }
+      try { updateYtdlp(); } catch { /* non-fatal */ }
       fs.writeFileSync(stampFile, String(Math.floor(Date.now() / 1000)));
     }
   } catch { /* non-fatal */ }
