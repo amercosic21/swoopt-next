@@ -58,8 +58,21 @@ brew install yt-dlp ffmpeg
 sudo apt install ffmpeg && sudo pipx install yt-dlp
 ```
 
-Or download the standalone binaries manually, drop them in any folder
-(e.g. `C:\Users\<you>\bin`), and add that folder to your PATH.
+On Windows, if you don't have Scoop yet, install it once first - in a normal
+(non-admin) PowerShell - then run the command above:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+irm get.scoop.sh | iex
+```
+
+See [scoop.sh](https://scoop.sh) for details. Prefer not to use a package manager?
+Just download the standalone binaries, drop them in any folder (e.g.
+`C:\Users\<you>\bin`), and add that folder to your PATH.
+
+> **After installing the tools, open a new terminal** - or restart your editor/IDE if
+> you run commands from its built-in terminal - so it picks up the updated PATH. A
+> shell that was already open won't see the new tools until it's relaunched.
 
 **Option B - point the app at explicit paths.** If you'd rather not touch PATH,
 install the tools anywhere and tell the app where they are via `.env.local`
