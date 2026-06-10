@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getJob, updateJob, countByStatus, getByStatus } from '@/lib/JobManager';
-import { dispatch } from '@/lib/Downloader';
-import { MAX_CONCURRENT_JOBS } from '@/lib/config';
+import { getJob, updateJob, requestStop } from '@/lib/JobManager';
 import { apiError, readJobIdBody, removeOutputDir, killProcess } from '@/lib/apiHelpers';
 
 export async function POST(req: NextRequest) {
@@ -13,17 +11,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: 'Job already finished.' });
     }
 
-    killProcess(job.pid);
-    updateJob(jobId, { status: 'cancelled' });
-    removeOutputDir(job);
-
-    // Free the slot for the next queued job
-    try {
-      if (countByStatus('running') < MAX_CONCURRENT_JOBS) {
-        const queued = getByStatus('queued', 1);
-        if (queued.length > 0) dispatch(queued[0].id);
-      }
-    } catch { /* non-fatal */ }
+    if (job.status === 'running') {
+      // Signal the worker to cancel, then stop yt-dlp. The worker writes 'cancelled',
+      // removes the partial, and dispatches the next queued job when its run ends.
+      requestStop(jobId, 'cancel');
+      killProcess(job.pid);
+    } else {
+      // queued or paused: no worker is running, so cancel directly.
+      updateJob(jobId, { status: 'cancelled' });
+      removeOutputDir(job);
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

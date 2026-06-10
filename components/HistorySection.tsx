@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { useStore } from '@/store/useStore';
 import { useI18n } from '@/hooks/useI18n';
+import { usePolling } from '@/hooks/usePolling';
 import { postJson, postJsonVoid } from '@/utils/http';
 import { HistoryJobCard } from './JobCard';
 import type { Job } from '@/types';
 
 export function HistorySection() {
   const { t } = useI18n();
+  const { startPolling } = usePolling();
   const { historyJobs, removeHistory, addToast, addActiveJob } = useStore();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -35,12 +37,25 @@ export function HistorySection() {
         id: data.job_id,
         status: data.status || 'queued',
         progress: 0,
+        current_item: 0,
+        total_items: 0,
+        files: [],
         error: null,
         pid: null,
+        has_started: false,
+        // Clear the previous attempt's live-progress fields so the requeued card
+        // starts clean instead of showing stale bytes/speed until the first poll.
+        phase: undefined,
+        download_speed: null,
+        downloaded_size: null,
+        total_size: null,
+        stream: null,
+        warning: null,
         created_at: Math.floor(Date.now() / 1000),
         updated_at: Math.floor(Date.now() / 1000),
       };
       addActiveJob(data.job_id, newJob);
+      startPolling(data.job_id);
       addToast(t('toast.downloadStarted'), 'success');
     } catch {
       addToast(t('form.serverError'), 'error');

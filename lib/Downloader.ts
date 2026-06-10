@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { YTDLP_BIN, FFMPEG_BIN, NODE_BIN, BASE_DIR } from './config';
-import { getJob, updateJob } from './JobManager';
+import { getJob, updateJob, consumeStopSignal, clearStopSignals } from './JobManager';
 import { getSettings, incrementStats } from './Settings';
 import { resolveFormat, requestedHeight } from './FormatResolver';
 import { enrichJobMetadata } from './metadata';
@@ -50,10 +50,15 @@ function buildArgs(job: Job, formatFlags: string[]): string[] {
     '--ignore-errors',
     '-c',
     // Resilience against transient YouTube failures (JS-challenge / signature
-    // extraction). Without retries a single hiccup makes the high-res DASH
-    // streams unreachable and yt-dlp silently drops to a low-res progressive
-    // format — the exact cause of the "downloaded quality is too low" bug.
-    '--retries', '5',
+    // extraction). Without retries a single hiccup makes the high-res DASH streams
+    // unreachable and yt-dlp silently drops to a low-res progressive format — the
+    // "downloaded quality is too low" bug.
+    // --socket-timeout abandons a hung connection (instead of freezing) and retries;
+    // --concurrent-fragments pulls several ranges in parallel for faster, more
+    // throttle-resistant large DASH/YouTube downloads.
+    '--socket-timeout', '30',
+    '--concurrent-fragments', '4',
+    '--retries', '10',
     '--fragment-retries', '10',
     '--extractor-retries', '3',
     '--output', outputTemplate,
@@ -139,9 +144,10 @@ function finalizeJob(jobId: string, job: Job, exitCode: number | null, stderrOut
 /** Run a download to completion: spawn yt-dlp, stream progress, finalize. */
 export async function run(jobId: string): Promise<void> {
   const job = getJob(jobId);
+  clearStopSignals(jobId); // drop any stale pause/cancel signal from a previous run
   const isResume = !!job.has_started;
 
-  const startUpdate: Partial<Job> = { status: 'running', pid: process.pid, has_started: true };
+  const startUpdate: Partial<Job> = { status: 'running', pid: process.pid, worker_pid: process.pid, has_started: true };
   if (isResume) {
     Object.assign(startUpdate, {
       download_speed: null, downloaded_size: null, total_size: null, stream: null, phase: 'resuming',
@@ -174,13 +180,36 @@ export async function run(jobId: string): Promise<void> {
     let stderrOutput = '';
 
     proc.stdout.on('data', (chunk: Buffer) => {
-      for (const line of chunk.toString().split('\n')) parseLine(line.trim(), jobId);
+      // NEVER let a parse/write error escape this handler: an uncaught throw here
+      // crashes the whole worker process and kills yt-dlp with it. On Windows a
+      // job-file write can transiently fail (antivirus, or the server reading the
+      // same file mid-rename), so a dropped progress update must be survivable.
+      try {
+        for (const line of chunk.toString().split('\n')) parseLine(line.trim(), jobId);
+      } catch { /* drop this update, keep the download alive */ }
     });
     proc.stderr.on('data', (chunk: Buffer) => { stderrOutput += chunk.toString(); });
 
     proc.on('close', (exitCode) => {
-      if (getJob(jobId).status === 'cancelled') { resolve(); return; }
-      finalizeJob(jobId, job, exitCode, stderrOutput);
+      try {
+        // The worker is the SOLE writer of the job's final status, so there's no
+        // cross-process race. A stop signal from the server decides the outcome:
+        // pause -> resumable (keep the partial); cancel -> remove the partial.
+        // Otherwise the download ended on its own and we finalize it.
+        const signal = consumeStopSignal(jobId);
+        if (signal === 'pause') {
+          updateJob(jobId, { status: 'paused', phase: 'paused' });
+        } else if (signal === 'cancel') {
+          updateJob(jobId, { status: 'cancelled' });
+          try { fs.rmSync(job.output_dir.replace(/[\\/]+$/, ''), { recursive: true, force: true }); } catch { /* ignore */ }
+        } else {
+          finalizeJob(jobId, job, exitCode, stderrOutput);
+        }
+      } catch (err) {
+        try {
+          updateJob(jobId, { status: 'failed', error: err instanceof Error ? err.message : 'Finalize failed' });
+        } catch { /* ignore */ }
+      }
       resolve();
     });
   });

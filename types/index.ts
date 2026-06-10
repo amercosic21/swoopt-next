@@ -29,7 +29,8 @@ export interface Job {
   output_dir: string;
   files: string[];
   error: string | null;
-  pid: number | null;
+  pid: number | null;          // PID of the active yt-dlp child (what cancel/pause kills)
+  worker_pid?: number | null;  // PID of the download worker (alive through download + finalize)
   created_at: number;
   updated_at: number;
   // Optional progress fields

@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { validateJobId } from '@/lib/Sanitizer';
-import { getJob } from '@/lib/JobManager';
+import { getJob, reconcileStaleJob } from '@/lib/JobManager';
 import { BASE_DIR } from '@/lib/config';
 import { apiError } from '@/lib/apiHelpers';
 
 export async function GET(req: NextRequest) {
   try {
     const jobId = validateJobId(req.nextUrl.searchParams.get('job_id') ?? '');
-    const job = getJob(jobId);
+    const job = reconcileStaleJob(getJob(jobId));
 
     // For running/paused playlists, scan for completed files in real-time
     if (['running', 'paused'].includes(job.status) && job.type === 'playlist') {

@@ -97,14 +97,20 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cancel active downloads on tab close (sendBeacon)
+  // Pause any running download when the tab is refreshed, closed, or the browser
+  // quits. The worker is server-side so the file/partial survive; sendBeacon pauses
+  // it cleanly so it can be resumed (from the partial via yt-dlp -c) when you return,
+  // rather than running on invisibly. Queued jobs are left as-is.
   useEffect(() => {
     const handleBeforeUnload = () => {
-      const ids = getSavedActiveJobs();
-      for (const jobId of ids) {
-        navigator.sendBeacon('/api/cancel', new Blob([JSON.stringify({ job_id: jobId })], { type: 'application/json' }));
+      for (const [jobId, job] of useStore.getState().activeJobs) {
+        if (job.status === 'running') {
+          navigator.sendBeacon(
+            '/api/pause',
+            new Blob([JSON.stringify({ job_id: jobId })], { type: 'application/json' }),
+          );
+        }
       }
-      localStorage.removeItem('sw_active_jobs');
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);

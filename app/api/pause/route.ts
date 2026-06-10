@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getJob, updateJob } from '@/lib/JobManager';
+import { getJob, requestStop } from '@/lib/JobManager';
 import { apiError, readJobIdBody, killProcess } from '@/lib/apiHelpers';
 
 export async function POST(req: NextRequest) {
@@ -11,8 +11,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Only running jobs can be paused.' }, { status: 409 });
     }
 
+    // Signal the worker to pause, then stop yt-dlp. The worker sees the signal in its
+    // close handler and writes 'paused' itself — sole status writer, so no race.
+    requestStop(jobId, 'pause');
     killProcess(job.pid);
-    updateJob(jobId, { status: 'paused' });
     return NextResponse.json({ success: true });
   } catch (err) {
     return apiError(err);
