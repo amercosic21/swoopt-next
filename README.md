@@ -1,5 +1,12 @@
 # Swoopt
 
+<img width="1917" height="987" alt="image" src="https://github.com/user-attachments/assets/e425d7f0-2766-45a3-91de-0d1fba8033a6" />
+
+
+<img width="1437" height="671" alt="image" src="https://github.com/user-attachments/assets/53d6c9d3-26f7-4af5-a914-7873b37a95a8" />
+
+
+
 A self-hosted media downloader built with Next.js. Paste a URL, pick a format, and download videos or audio from YouTube, Vimeo, SoundCloud, Twitter/X, Instagram, TikTok, Dailymotion, and Twitch.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black)
